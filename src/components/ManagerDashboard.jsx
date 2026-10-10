@@ -101,7 +101,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
 
   const loadData = async () => {
     // Team users (employees under manager's unit)
-    const allUsers = await allUsersList;
+    const allUsers = await db.getAll('users');
     const users = allUsers.filter(u => u.unit_id === currentUser.unit_id && u.role === 'funcionario');
     setTeamUsers(users);
 
@@ -148,7 +148,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
     });
     setScheduleGrid(grid);
 
-    const qList = await allQuestionsList;
+    const qList = await db.getAll('questions');
     setAllQuestionsList(qList);
 
     const aList = await db.getAll('activity_assignments');
@@ -264,7 +264,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
   };
 
   // AI simulated question generator
-  const handleAiQuestionGenerate = () => {
+  const handleAiQuestionGenerate = async () => {
     if (!aiTheme || !aiGuideId) {
       alert('Selecione o Tema e o Guide correspondente.');
       return;
@@ -321,7 +321,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
   };
 
   // Publishing / Saving Activity
-  const saveActivity = (status = 'draft') => {
+  const saveActivity = async (status = 'draft') => {
     if (!activityForm.title || !activityForm.theme || !activityForm.deadline) {
       triggerToast('Preencha Título, Tema e Prazo da Atividade.', true);
       return;
@@ -354,8 +354,8 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
 
     // If published, assign to all team members and create notifications
     if (status === 'published') {
-      const assignments = db.getAll('activity_assignments');
-      teamUsers.forEach(u => {
+      const assignments = await db.getAll('activity_assignments');
+      for (const u of teamUsers) {
         // If not already assigned
         const exist = assignments.find(a => a.activity_id === savedAct.id && a.user_id === u.id);
         if (!exist) {
@@ -378,7 +378,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
             type: 'activity'
           });
         }
-      });
+      }
       await db.saveTable('activity_assignments', assignments);
       triggerToast('Atividade publicada! Funcionários notificados.');
     } else {
@@ -421,7 +421,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
     }));
   };
 
-  const handleSaveSchedules = () => {
+  const handleSaveSchedules = async () => {
     const payload = [];
     Object.keys(scheduleGrid).forEach(key => {
       const [userId, date] = key.split('_');
@@ -439,7 +439,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
   };
 
   // --- EVALUATION (PERFORMANCE REVIEW) CONTROLLERS ---
-  const handleSaveEval = (e) => {
+  const handleSaveEval = async (e) => {
     e.preventDefault();
     if (!newEval.employee_id || !newEval.positives || !newEval.improvements) {
       triggerToast('Preencha os campos obrigatórios da avaliação.', true);
@@ -461,7 +461,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
     await loadData();
   };
 
-  const handleDeleteEval = (id) => {
+  const handleDeleteEval = async (id) => {
     if (confirm('Tem certeza que deseja excluir esta avaliação?')) {
       await db.delete('evaluations', id);
       triggerToast('Avaliação excluída.');
