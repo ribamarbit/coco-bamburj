@@ -58,17 +58,39 @@ export default function AdminDashboard({ currentUser, currentTab, setCurrentTab 
     loadData();
   }, [currentTab]);
 
-  const loadData = () => {
-    setUsers(db.getAll('users'));
-    setUnits(db.getAll('units'));
-    setSectors(db.getAll('departments'));
-    setPositions(db.getAll('positions'));
-    setDocuments(db.getAll('documents'));
-    setActivities(db.getAll('activities'));
-    setAssignments(db.getAll('activity_assignments'));
-    setTrainings(db.getAll('trainings'));
-    setSchedules(db.getAll('work_schedules'));
-    setStats(db.getAdminStats());
+  const loadData = async () => {
+    try {
+      const [
+        usersData, unitsData, sectorsData, positionsData, 
+        documentsData, activitiesData, assignmentsData, trainingsData, 
+        schedulesData, statsData
+      ] = await Promise.all([
+        db.getAll('users'),
+        db.getAll('units'),
+        db.getAll('departments'),
+        db.getAll('positions'),
+        db.getAll('documents'),
+        db.getAll('activities'),
+        db.getAll('activity_assignments'),
+        db.getAll('trainings'),
+        db.getAll('work_schedules'),
+        db.getAdminStats()
+      ]);
+
+      setUsers(usersData);
+      setUnits(unitsData);
+      setSectors(sectorsData);
+      setPositions(positionsData);
+      setDocuments(documentsData);
+      setActivities(activitiesData);
+      setAssignments(assignmentsData);
+      setTrainings(trainingsData);
+      setSchedules(schedulesData);
+      setStats(statsData);
+    } catch (e) {
+      console.error('Failed to load admin data:', e);
+      triggerToast('Erro ao carregar os dados.', true);
+    }
   };
 
   // --- CRUD ACTIONS ---
@@ -95,15 +117,15 @@ export default function AdminDashboard({ currentUser, currentTab, setCurrentTab 
     setShowCrudModal(true);
   };
 
-  const handleDelete = (table, id) => {
+  const handleDelete = async (table, id) => {
     if (confirm(`Tem certeza que deseja excluir este item de ${table}?`)) {
-      db.delete(table, id);
+      await db.delete(table, id);
       triggerToast('Item excluído com sucesso.');
-      loadData();
+      await loadData();
     }
   };
 
-  const handleSaveCrud = (e) => {
+  const handleSaveCrud = async (e) => {
     e.preventDefault();
     const { table, data } = editingItem;
 
@@ -128,12 +150,16 @@ export default function AdminDashboard({ currentUser, currentTab, setCurrentTab 
       return;
     }
 
-    // Save to local DB
-    db.save(table, data);
-    triggerToast('Alterações salvas com sucesso.');
-    setShowCrudModal(false);
-    setEditingItem(null);
-    loadData();
+    // Save to Supabase
+    try {
+      await db.save(table, data);
+      triggerToast('Alterações salvas com sucesso.');
+      setShowCrudModal(false);
+      setEditingItem(null);
+      await loadData();
+    } catch (e) {
+      triggerToast('Erro ao salvar.', true);
+    }
   };
 
   return (

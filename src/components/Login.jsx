@@ -31,7 +31,7 @@ export default function Login({ onLoginSuccess }) {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState({ success: false, message: '' });
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setErrorMessage('Por favor, insira e-mail e senha.');
@@ -41,25 +41,23 @@ export default function Login({ onLoginSuccess }) {
     setLoading(true);
     setErrorMessage('');
 
-    setTimeout(() => {
-      const res = db.login(email, password);
-      setLoading(false);
-      if (res.success) {
-        onLoginSuccess(res.user);
-      } else {
-        setErrorMessage(res.message);
-      }
-    }, 800); // micro-delay for premium feel
+    const res = await db.login(email, password);
+    setLoading(false);
+    if (res.success) {
+      onLoginSuccess(res.user);
+    } else {
+      setErrorMessage(res.message);
+    }
   };
 
-  const handleForgotPassword = (e) => {
+  const handleForgotPassword = async (e) => {
     e.preventDefault();
     if (!forgotEmail) {
       setForgotStatus({ success: false, message: 'Digite seu e-mail.' });
       return;
     }
 
-    const res = db.resetPassword(forgotEmail);
+    const res = await db.resetPassword(forgotEmail);
     setForgotStatus({ success: res.success, message: res.message });
   };
 

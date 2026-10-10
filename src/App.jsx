@@ -30,9 +30,9 @@ export default function App() {
     }
   }, [currentUser]);
 
-  const loadNotifications = () => {
-    const list = db.getAll('notifications').filter(n => n.user_id === currentUser.id);
-    setNotifications(list);
+  const loadNotifications = async () => {
+    const list = await db.getAll('notifications');
+    setNotifications(list.filter(n => n.user_id === currentUser.id));
   };
 
   const handleLoginSuccess = (user) => {
@@ -40,28 +40,23 @@ export default function App() {
     setCurrentTab('dashboard'); // default starting tab
   };
 
-  const handleLogout = () => {
-    db.logout();
+  const handleLogout = async () => {
+    await db.logout();
     setCurrentUser(null);
     setCurrentTab('dashboard');
   };
 
-  const markAllNotificationsRead = () => {
-    const allNotifs = db.getAll('notifications');
-    const updated = allNotifs.map(n => {
-      if (n.user_id === currentUser.id) {
-        return { ...n, is_read: true };
-      }
-      return n;
-    });
-    db.saveTable('notifications', updated);
+  const markAllNotificationsRead = async () => {
+    const userNotifs = notifications.filter(n => !n.is_read);
+    for (const n of userNotifs) {
+      await db.save('notifications', { ...n, is_read: true });
+    }
     loadNotifications();
     triggerToast('Notificações marcadas como lidas.');
   };
 
-  const clearNotification = (id) => {
-    const allNotifs = db.getAll('notifications').filter(n => n.id !== id);
-    db.saveTable('notifications', allNotifs);
+  const clearNotification = async (id) => {
+    await db.delete('notifications', id);
     loadNotifications();
   };
 

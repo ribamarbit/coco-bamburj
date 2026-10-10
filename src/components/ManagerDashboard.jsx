@@ -34,6 +34,9 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
   
   // Dashboard Metrics
   const [stats, setStats] = useState(null);
+  const [allUsersList, setAllUsersList] = useState([]);
+  const [allQuestionsList, setAllQuestionsList] = useState([]);
+  const [allAssignmentsList, setAllAssignmentsList] = useState([]);
 
   // --- WARMUP (ESQUENTA) STATE ---
   const [showWarmupModal, setShowWarmupModal] = useState(false);
@@ -96,29 +99,33 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
     }
   }, [currentUser, currentTab]);
 
-  const loadData = () => {
+  const loadData = async () => {
     // Team users (employees under manager's unit)
-    const users = db.getAll('users').filter(u => u.unit_id === currentUser.unit_id && u.role === 'funcionario');
+    const allUsers = await allUsersList;
+    const users = allUsers.filter(u => u.unit_id === currentUser.unit_id && u.role === 'funcionario');
     setTeamUsers(users);
 
     // Documents
-    const docs = db.getAll('documents');
+    const docs = await db.getAll('documents');
     setDocuments(docs);
 
     // Warmups for unit
-    const warps = db.getAll('warmups').filter(w => w.unit_id === currentUser.unit_id);
+    const allWarmups = await db.getAll('warmups');
+    const warps = allWarmups.filter(w => w.unit_id === currentUser.unit_id);
     setWarmups(warps);
 
     // Activities
-    const acts = db.getAll('activities').filter(a => a.unit_id === currentUser.unit_id);
+    const allActivities = await db.getAll('activities');
+    const acts = allActivities.filter(a => a.unit_id === currentUser.unit_id);
     setActivities(acts);
 
     // Evaluations
-    const evals = db.getAll('evaluations').filter(e => e.manager_id === currentUser.id);
+    const allEvaluations = await db.getAll('evaluations');
+    const evals = allEvaluations.filter(e => e.manager_id === currentUser.id);
     setEvaluations(evals);
 
     // Manager Dashboard statistics
-    const st = db.getManagerStats(currentUser.id);
+    const st = await db.getManagerStats(currentUser.id);
     setStats(st);
 
     // Setup week dates (24-Aug-2026 to 30-Aug-2026 for demonstration)
@@ -126,7 +133,8 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
     setWeekDates(dates);
 
     // Load work schedules
-    const schs = db.getAll('work_schedules').filter(s => users.map(u => u.id).includes(s.user_id));
+    const allSchedules = await db.getAll('work_schedules');
+    const schs = allSchedules.filter(s => users.map(u => u.id).includes(s.user_id));
     setSchedules(schs);
 
     // Build schedule edit grid
@@ -139,10 +147,18 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       };
     });
     setScheduleGrid(grid);
+
+    const qList = await allQuestionsList;
+    setAllQuestionsList(qList);
+
+    const aList = await db.getAll('activity_assignments');
+    setAllAssignmentsList(aList);
+
+    setAllUsersList(allUsers);
   };
 
   // --- WARMUP (ESQUENTA) CONTROLLERS ---
-  const handleSaveWarmup = (e) => {
+  const handleSaveWarmup = async (e) => {
     e.preventDefault();
     if (!newWarmup.title || !newWarmup.theme || !newWarmup.content) {
       triggerToast('Preencha os campos obrigatórios.', true);
@@ -157,14 +173,14 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       date_created: new Date().toISOString()
     };
 
-    db.save('warmups', warmupToSave);
+    await db.save('warmups', warmupToSave);
     triggerToast('Esquenta registrado com sucesso!');
     setShowWarmupModal(false);
     setNewWarmup({
       title: '', theme: '', sector_id: 'd-atendimento', date: new Date().toISOString().split('T')[0],
       shift: 'Almoço', duration: '10 min', content: '', guide_id: '', notes: ''
     });
-    loadData();
+    await loadData();
   };
 
   // --- ACTIVITY & QUESTIONS CONTROLLERS ---
@@ -254,7 +270,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       return;
     }
 
-    const guide = db.getById('documents', aiGuideId);
+    const guide = await db.getById('documents', aiGuideId);
     const guideName = guide ? guide.name : 'Guide Geral';
 
     // Seed 10 simulated questions based on theme
@@ -323,10 +339,10 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       status: status
     };
 
-    const savedAct = db.save('activities', actObj);
+    const savedAct = await db.save('activities', actObj);
 
     // Save questions associated with this activity
-    const allQuestionsInDb = db.getAll('questions').filter(q => q.activity_id !== savedAct.id);
+    const allQuestionsInDb = allQuestionsList.filter(q => q.activity_id !== savedAct.id);
     const updatedQs = activityQuestions.map((q, idx) => ({
       ...q,
       id: q.id.startsWith('q-temp') || q.id.startsWith('q-ai') || q.id.startsWith('q-imp') ? `q-${savedAct.id}-${idx}` : q.id,
@@ -334,7 +350,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       question_index: idx
     }));
 
-    db.saveTable('questions', [...allQuestionsInDb, ...updatedQs]);
+    await db.saveTable('questions', [...allQuestionsInDb, ...updatedQs]);
 
     // If published, assign to all team members and create notifications
     if (status === 'published') {
@@ -354,7 +370,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
           });
 
           // Create notification for employee
-          db.save('notifications', {
+          await db.save('notifications', {
             user_id: u.id,
             message: `Nova atividade disponível: "${savedAct.title}". Responda até ${savedAct.deadline}.`,
             is_read: false,
@@ -363,25 +379,25 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
           });
         }
       });
-      db.saveTable('activity_assignments', assignments);
+      await db.saveTable('activity_assignments', assignments);
       triggerToast('Atividade publicada! Funcionários notificados.');
     } else {
       triggerToast('Atividade salva como rascunho com sucesso.');
     }
 
     setShowActivityModal(false);
-    loadData();
+    await loadData();
   };
 
   // Delete Activity
-  const handleDeleteActivity = (actId) => {
+  const handleDeleteActivity = async (actId) => {
     if (confirm('Tem certeza que deseja excluir esta atividade permanentemente?')) {
-      db.delete('activities', actId);
+      await db.delete('activities', actId);
       // Remove associated questions
-      const qs = db.getAll('questions').filter(q => q.activity_id !== actId);
-      db.saveTable('questions', qs);
+      const qs = allQuestionsList.filter(q => q.activity_id !== actId);
+      await db.saveTable('questions', qs);
       triggerToast('Atividade excluída.');
-      loadData();
+      await loadData();
     }
   };
 
@@ -416,10 +432,10 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       });
     });
 
-    db.saveWorkSchedules(payload);
+    await db.saveWorkSchedules(payload);
     setIsEditingSchedule(false);
     triggerToast('Escala de trabalho da equipe salva com sucesso!');
-    loadData();
+    await loadData();
   };
 
   // --- EVALUATION (PERFORMANCE REVIEW) CONTROLLERS ---
@@ -435,34 +451,34 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
       manager_id: currentUser.id
     };
 
-    db.save('evaluations', evalObj);
+    await db.save('evaluations', evalObj);
     triggerToast('Avaliação de desempenho salva com sucesso.');
     setShowEvalModal(false);
     setNewEval({
       employee_id: '', period: 'Agosto 2026', positives: '', improvements: '',
       remarks: '', training_needed: '', feedback: '', date: new Date().toISOString().split('T')[0]
     });
-    loadData();
+    await loadData();
   };
 
   const handleDeleteEval = (id) => {
     if (confirm('Tem certeza que deseja excluir esta avaliação?')) {
-      db.delete('evaluations', id);
+      await db.delete('evaluations', id);
       triggerToast('Avaliação excluída.');
-      loadData();
+      await loadData();
     }
   };
 
   // --- EMPLOYEE DETAIL MODAL ---
-  const handleOpenEmployeeDetail = (emp) => {
+  const handleOpenEmployeeDetail = async (emp) => {
     // Get evaluations for employee
     const empEvals = evaluations.filter(e => e.employee_id === emp.id);
     
     // Get activity assignments
-    const empAsgs = db.getTable('activity_assignments')
+    const empAsgs = allAssignmentsList
       .filter(asg => asg.user_id === emp.id && asg.status === 'completed')
       .map(asg => {
-        const act = db.getById('activities', asg.activity_id);
+        const act = activities.find(a => a.id === asg.activity_id);
         return {
           ...asg,
           title: act ? act.title : 'Atividade Antiga'
@@ -786,7 +802,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
                   </thead>
                   <tbody>
                     {teamUsers.slice(0, 3).map(emp => {
-                      const empAsgs = db.getTable('activity_assignments').filter(a => a.user_id === emp.id && a.status === 'completed');
+                      const empAsgs = allAssignmentsList.filter(a => a.user_id === emp.id && a.status === 'completed');
                       const avg = empAsgs.length > 0
                         ? Math.round((empAsgs.reduce((acc, a) => acc + a.score, 0) / empAsgs.length) * 10)
                         : 0;
@@ -850,7 +866,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
               <tbody>
                 {warmups.map(w => {
                   const guide = documents.find(d => d.id === w.guide_id);
-                  const manager = db.getById('users', w.manager_id);
+                  const manager = allUsersList.find(u => u.id === w.manager_id);
                   return (
                     <tr key={w.id}>
                       <td style={{ fontWeight: '600', color: 'var(--text-title)' }}>{w.title}</td>
@@ -929,7 +945,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
                       onClick={() => {
                         // Load into creation flow for editing
                         setActivityForm(act);
-                        const qs = db.getAll('questions').filter(q => q.activity_id === act.id);
+                        const qs = allQuestionsList.filter(q => q.activity_id === act.id);
                         setActivityQuestions(qs);
                         setEditingQuestionIdx(-1);
                         setShowActivityModal(true);
@@ -980,7 +996,7 @@ export default function ManagerDashboard({ currentUser, currentTab, setCurrentTa
               </thead>
               <tbody>
                 {teamUsers.map(emp => {
-                  const empAsgs = db.getTable('activity_assignments').filter(a => a.user_id === emp.id && a.status === 'completed');
+                  const empAsgs = allAssignmentsList.filter(a => a.user_id === emp.id && a.status === 'completed');
                   const avg = empAsgs.length > 0
                     ? Math.round((empAsgs.reduce((acc, a) => acc + a.score, 0) / empAsgs.length) * 10)
                     : 0;

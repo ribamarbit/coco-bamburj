@@ -45,20 +45,22 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
     }
   }, [currentUser, currentTab]);
 
-  const loadData = () => {
+  const loadData = async () => {
     // Activities
-    const acts = db.getEmployeeActivities(currentUser.id);
+    const acts = await db.getEmployeeActivities(currentUser.id);
     setActivities(acts);
 
     // Documents (Guides) - Employees only see documents related to their sector, or global (sector_id = '')
-    const docs = db.getAll('documents').filter(d => 
+    const docsData = await db.getAll('documents');
+    const docs = docsData.filter(d => 
       d.status === 'active' && 
       (d.sector_id === currentUser.department_id || !d.sector_id || currentUser.role === 'admin')
     );
     setDocuments(docs);
 
     // Warmups for employee's unit & sector
-    const warps = db.getAll('warmups').filter(w => 
+    const warpsData = await db.getAll('warmups');
+    const warps = warpsData.filter(w => 
       w.status === 'completed' && 
       w.unit_id === currentUser.unit_id &&
       w.sector_id === currentUser.department_id
@@ -66,7 +68,8 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
     setWarmups(warps);
 
     // Trainings for employee's unit & sector (or all if admin)
-    const train = db.getAll('trainings').filter(t => 
+    const trainData = await db.getAll('trainings');
+    const train = trainData.filter(t => 
       t.status === 'scheduled' && 
       (currentUser.role === 'admin' || t.unit_id === currentUser.unit_id) &&
       (currentUser.role === 'admin' || t.sector_id === currentUser.department_id || !t.sector_id)
@@ -74,16 +77,17 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
     setTrainings(train);
 
     // Work Schedules for current employee
-    const schs = db.getAll('work_schedules').filter(s => s.user_id === currentUser.id);
+    const schsData = await db.getAll('work_schedules');
+    const schs = schsData.filter(s => s.user_id === currentUser.id);
     setSchedules(schs);
   };
 
-  // Activity taking handlers
-  const startExam = (activity) => {
+  const startExam = async (activity) => {
     // Fetch questions for this activity
-    const allQuestions = db.getAll('questions').filter(q => q.activity_id === activity.id);
+    const allQuestions = await db.getAll('questions');
+    const activityQuestions = allQuestions.filter(q => q.activity_id === activity.id);
     // Sort by question_index
-    const sortedQs = allQuestions.sort((a,b) => a.question_index - b.question_index);
+    const sortedQs = activityQuestions.sort((a,b) => a.question_index - b.question_index);
     
     setActiveActivity({
       ...activity,
@@ -115,7 +119,7 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
     }
   };
 
-  const finishExam = () => {
+  const finishExam = async () => {
     // Validate that all questions are answered
     const unanswered = activeActivity.questions.filter(q => !selectedAnswers[q.id]);
     if (unanswered.length > 0) {
@@ -128,13 +132,13 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
       chosen_option: selectedAnswers[q.id]
     }));
 
-    const res = db.submitActivity(currentUser.id, activeActivity.id, payload);
+    const res = await db.submitActivity(currentUser.id, activeActivity.id, payload);
     if (res.success) {
       // Reload activities list
-      loadData();
+      await loadData();
       
       // Load details for showing correction page
-      const details = db.getAssignmentDetails(res.assignment.id);
+      const details = await db.getAssignmentDetails(res.assignment.id);
       setExamResult(details);
     }
   };
@@ -512,8 +516,8 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
                             </span>
                             <button 
                               className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                const details = db.getAssignmentDetails(asg.assignment_id);
+                              onClick={async () => {
+                                const details = await db.getAssignmentDetails(asg.assignment_id);
                                 setExamResult(details);
                                 setActiveActivity(asg);
                               }}
@@ -576,8 +580,8 @@ export default function EmployeeDashboard({ currentUser, currentTab, setCurrentT
                           {act.status_assignment === 'completed' ? (
                             <button 
                               className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                const details = db.getAssignmentDetails(act.assignment_id);
+                              onClick={async () => {
+                                const details = await db.getAssignmentDetails(act.assignment_id);
                                 setExamResult(details);
                                 setActiveActivity(act);
                               }}
